@@ -1,3 +1,5 @@
+
+
 const express = require("express");
 const app = express();
 const server = require("http").Server(app);
@@ -15,7 +17,6 @@ function shuffle(cards,times){
     })
   }
 };
-
 let allCards = [],
   player= {},
   playerNum = 2;

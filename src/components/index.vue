@@ -30,7 +30,7 @@
         </div>
         <div style="width:10%" class="right">
           <div class="button">
-            <button @click="playCard">出牌</button>
+            <button @click="playCard" :disabled="!checkCards">出牌</button>
             <button>Pass</button>
           </div>
         </div>
@@ -44,21 +44,99 @@
     name: 'index',
     data() {
       return {
-        allCards: [],
-        cards: ['3H', '9D', '3C', '2C', '2D', '6H', '7C', '8C', '9C', 'IC', 'QC'],
+        cards: ['6D', '5C', '3C', '9S', '9H', '4D', '2C', 'JC', 'IH', 'IC', 'QC', 'RD', '1S'],
         cardWidthPer: 0,
         showCardWidthPer: 0,
         chosenCards: [],
-        showCards: []
+        chosenCardInfo: {
+          type: "",
+          value: ""
+        },
+        showCards: [],
+        lastCardsInfo: {
+          type: "",
+          value: ""
+        },
+        yourTurn: false,
+        allPass: false,
+        test: ""
       }
     },
     computed: {
       sortCards() {
         return this.cards.sort();
+      },
+      checkCards() {
+        let result = false;
+        let lastCards = this.lastCardsInfo;
+        let cards = this.chosenCardInfo;
+        if (lastCards.type != false) {
+          switch (lastCards.type) {
+            case "single":
+              if (cards.type == "fourOfKind" || (cards.type == "single" && this.valueCompare(cards.value, lastCards.value))) result = true;
+              break;
+            case "pair":
+              if (cards.type == "fourOfKind" || cards.type == "straightFlush" || (cards.type == "pair" && this.valueCompare(cards.value, lastCards.value))) result = true;
+              break;
+            case "straight":
+              if (cards.type == "fourOfKind" || cards.type == "straightFlush") {
+                result = true;
+              } else if (cards.type == "straight") {
+                if (cards.value.substring(0, 1) == 1) {
+                  if (lastCards.value.substring(0, 1) == 1 && cards.value > lastCards.value) {
+                    result = true;
+                  }
+                } else if (lastCards.value.substring(0, 1) == 1) {
+                  if (!(cards.value.substring(0, 1) == 1 && cards.value < lastCards.value)) {
+                    result = true;
+                  }
+                } else if (this.valueCompare(cards.value, lastCards.value)) {
+                  result = true;
+                }
+              };
+              break;
+            case "straightFlush":
+              if (cards.type == "straightFlush") {
+                if (cards.value.substring(0, 1) == 1) {
+                  if (lastCards.value.substring(0, 1) == 1 && cards.value > lastCards.value) {
+                    result = true;
+                  }
+                } else if (lastCards.value.substring(0, 1) == 1) {
+                  if (!(cards.value.substring(0, 1) == 1 && cards.value < lastCards.value)) {
+                    result = true;
+                  }
+                } else if (this.valueCompare(cards.value, lastCards.value)) {
+                  result = true;
+                }
+              };
+              break;
+            case "fullHouse":
+              if (cards.type == "fourOfKind" || cards.type == "straightFlush" || (cards.type == "fullHouse" && this.valueCompare(cards.value, lastCards.value))) result = true;
+              break;
+            case "fourOfKind":
+              if (cards.type == "straightFlush" || (cards.type == "fourOfKind" && this.valueCompare(cards.value, lastCards.value))) result = true;
+              break;
+          };
+        } else {
+          if (this.allPass) {
+            if (cards.type != false) {
+              result = true;
+            }
+          } else {
+            if (this.chosenCards.includes('3C')) {
+              if (cards.type != false) {
+                result = true;
+              }
+            };
+          };
+        }
+        return result;
       }
     },
     methods: {
       chooseCard(index) {
+        this.chosenCardInfo.type = "";
+        this.chosenCardInfo.value = "";
         if (this.chosenCards.includes(this.cards[index])) {
           // 取消卡片
           let n = this.chosenCards.indexOf(this.cards[index]);
@@ -73,9 +151,13 @@
           this.$refs.card[index].style.border = "1px solid red";
           this.$refs.card[index].style.borderRadius = "12px";
         }
+        this.analysisCards();
+        console.log("chosen ", this.chosenCardInfo);
+        console.log("last ", this.lastCardsInfo);
+        console.log(this.valueCompare(this.chosenCardInfo.value, this.lastCardsInfo.value));
       },
       playCard() {
-        this.showCards = this.chosenCards.sort();
+        this.showCards = this.chosenCards;
         for (let element of this.chosenCards) {
           let index = this.cards.indexOf(element);
           this.cards.splice(index, 1);
@@ -86,41 +168,177 @@
           this.$refs.card[i].style.borderRadius = "";
         }
         this.chosenCards = [];
+        this.chosenCardInfo.type = "";
+        this.chosenCardInfo.value = "";
+      },
+      analysisCards() {
+        this.chosenCards = this.chosenCards.sort();
+        let cards = this.chosenCards;
+        let lastCardsInfo = this.lastCardsInfo;
+        let nums = [];
+        for (let c of cards) {
+          let n = c.substring(0, 1);
+          switch (n) {
+            case "I":
+              nums.push(10);
+              break;
+            case "J":
+              nums.push(11);
+              break;
+            case "Q":
+              nums.push(12);
+              break;
+            case "R":
+              nums.push(13);
+              break;
+            default:
+              nums.push(parseInt(n));
+              break;
+          }
+        }
+        switch (cards.length) {
+          case 1:
+            this.chosenCardInfo.type = "single";
+            this.chosenCardInfo.value = cards[0];
+            break;
+          case 2:
+            if (nums[0] == nums[1]) {
+              this.chosenCardInfo.type = "pair";
+              this.chosenCardInfo.value = cards[1];
+            };
+            break;
+          case 5:
+            let check = {
+              seq: []
+            };
+            for (let i = 0; i < 4; i++) {
+              let m = nums[i + 1] - nums[i];
+              check.seq.push(m);
+              if (check[m] == undefined) {
+                check[m] = 0;
+              }
+              check[m]++;
+            }
+            if (check[0] == 3) {
+              let vm = this;
+              check.seq.forEach((element, index) => {
+                if (element != 0) {
+                  switch (index) {
+                    case 0:
+                      vm.chosenCardInfo.type = "fourOfKind";
+                      vm.chosenCardInfo.value = nums[1];
+                      break;
+                    case 1:
+                      vm.chosenCardInfo.type = "fullHouse";
+                      vm.chosenCardInfo.value = nums[2];
+                      break;
+                    case 2:
+                      vm.chosenCardInfo.type = "fullHouse";
+                      vm.chosenCardInfo.value = nums[0];
+                      break;
+                    case 3:
+                      vm.chosenCardInfo.type = "fourOfKind";
+                      vm.chosenCardInfo.value = nums[0];
+                      break;
+                  };
+                };
+              })
+            } else if (check[1] == 4) {
+              if (this.checkFlower(cards)) {
+                this.chosenCardInfo.type = "straightFlush";
+                this.chosenCardInfo.value = cards[0];
+              } else {
+                this.chosenCardInfo.type = "straight";
+                this.chosenCardInfo.value = cards[0];
+              }
+            } else if (this.arraysEqual(nums, [1, 10, 11, 12, 13])) {
+              this.chosenCardInfo.type = "straight";
+              this.chosenCardInfo.value = cards[1];
+              let temp = cards.slice(0, 1);
+              cards.splice(0, 1);
+              cards.push(temp[0]);
+            };
+            break;
+        }
+      },
+      checkFlower(cards) {
+        cards = cards.map(x => x.substring(1, 2));
+        for (let i = 0; i < cards.length - 1; i++) {
+          if (cards[i] != cards[i + 1]) {
+            return false;
+          };
+        }
+        return true;
+      },
+      arraysEqual(a, b) {
+        for (let i = 0; i < a.length; ++i) {
+          if (a[i] !== b[i]) return false;
+        }
+        return true;
+      },
+      valueCompare(a, b) {
+        let ret = false;
+        if (typeof(a) == typeof(b)) {
+          let array = [a, b];
+          let num = [];
+          let temp;
+          for (let element of array) {
+            if (typeof(a) == "string") {
+              temp = element.substring(0, 1);
+            } else {
+              temp = element;
+            }
+            switch (temp) {
+              case "I":
+                num.push(10);
+                break;
+              case "J":
+                num.push(11);
+                break;
+              case "Q":
+                num.push(12);
+                break;
+              case "R":
+                num.push(13);
+                break;
+              default:
+                num.push(parseInt(temp));
+                break;
+            }
+          }
+          if (num[0] == num[1]) {
+            if (a > b) {
+              ret = true
+            }
+          } else {
+            switch (num[0]) {
+              case 1:
+                if (num[1] != 2) {
+                  ret = true;
+                }
+                break;
+              case 2:
+                ret = true;
+                break;
+              default:
+                if (num[1] != 1 && num[1] != 2 && num[0] > num[1]) {
+                  ret = true;
+                }
+                break;
+            };
+          }
+        }
+        return ret;
       },
       resizeCardWidth() {
         let height = this.$refs.cardPlace.clientHeight - 2;
         let width = this.$refs.cardPlace.clientWidth + 2;
         let cardWidth = height * 0.9 * (691 / 1056);
         this.cardWidthPer = (cardWidth / width) * 100;
-        console.log(cardWidth + 2)
         this.showCardWidthPer = ((cardWidth + 2) / width * 0.75) * 100;
       }
     },
     mounted() {
-      for (let i = 1; i <= 13; i++) {
-        let n;
-        switch (i) {
-          case 10:
-            n = "I";
-            break;
-          case 11:
-            n = "J";
-            break;
-          case 12:
-            n = "Q";
-            break;
-          case 13:
-            n = "K";
-            break;
-          default:
-            n = i;
-            break;
-        };
-        for (let type of ["C", "D", "H", "S"]) {
-          this.allCards.push(n + type);
-        };
-      }
-      console.log(this.allCards);
       let vm = this;
       this.$nextTick(() => {
         vm.resizeCardWidth();
