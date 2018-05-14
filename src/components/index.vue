@@ -4,6 +4,7 @@
       <div id="top">
         <span class="note">top</span>
         <div style="width:30%; " class="left">
+          <span v-if="yourTurn">換你了</span>
         </div>
         <div style="width:40%" class="center">
           {{cards}}<br> {{chosenCards}} <br>
@@ -26,12 +27,13 @@
         <div style="width:10%" class="left">
         </div>
         <div ref="cardPlace" style="width:80%" class="center">
-          <img ref="card" @mousedown="chooseCard(index)" :style="`left:${((96-cardWidthPer)/12)*index+2+(13-cards.length)*((96-cardWidthPer)/12/2)}%;`" v-for="(card,index) in sortCards" :src="`/static/cards/${card}.jpg`" />
+          <img v-if="isStart" ref="card" @mousedown="chooseCard(index)" :style="`left:${((96-cardWidthPer)/12)*index+2+(13-cards.length)*((96-cardWidthPer)/12/2)}%;`" v-for="(card,index) in sortCards" :src="`/static/cards/${card}.jpg`" />
+          <span style="position:absolute;top:40%;left:45%;width:10%;text-align:center;height:20%" v-if="!isStart">等待中</span>
         </div>
         <div style="width:10%" class="right">
           <div class="button">
-            <button @click="playCard" :disabled="!checkCards">出牌</button>
-            <button>Pass</button>
+            <button @click="playCard" :disabled="!yourTurn || !checkCards">出牌</button>
+            <button @click="pass" :disabled="!yourTurn">Pass</button>
           </div>
         </div>
       </div>
@@ -44,7 +46,7 @@
     name: 'index',
     data() {
       return {
-        cards: ['6D', '5C', '3C', '9S', '9H', '4D', '2C', 'JC', 'IH', 'IC', 'QC', 'RD', '1S'],
+        cards: [],
         cardWidthPer: 0,
         showCardWidthPer: 0,
         chosenCards: [],
@@ -59,7 +61,8 @@
         },
         yourTurn: false,
         allPass: false,
-        test: ""
+        player: 0,
+        isStart: false
       }
     },
     computed: {
@@ -152,11 +155,13 @@
           this.$refs.card[index].style.borderRadius = "12px";
         }
         this.analysisCards();
-        console.log("chosen ", this.chosenCardInfo);
-        console.log("last ", this.lastCardsInfo);
-        console.log(this.valueCompare(this.chosenCardInfo.value, this.lastCardsInfo.value));
       },
       playCard() {
+        this.$socket.emit("playCard", {
+          player: this.player,
+          cards: this.chosenCards,
+          cardsInfo: this.chosenCardInfo
+        })
         this.showCards = this.chosenCards;
         for (let element of this.chosenCards) {
           let index = this.cards.indexOf(element);
@@ -170,6 +175,18 @@
         this.chosenCards = [];
         this.chosenCardInfo.type = "";
         this.chosenCardInfo.value = "";
+        this.lastCardsInfo.type = "";
+        this.lastCardsInfo.value = "";
+        this.yourTurn = false;
+      },
+      pass() {
+        this.$socket.emit("pass", this.player);
+        this.chosenCards = [];
+        this.chosenCardInfo.type = "";
+        this.chosenCardInfo.value = "";
+        this.lastCardsInfo.type = "";
+        this.lastCardsInfo.value = "";
+        this.yourTurn = false;
       },
       analysisCards() {
         this.chosenCards = this.chosenCards.sort();
@@ -336,6 +353,34 @@
         let cardWidth = height * 0.9 * (691 / 1056);
         this.cardWidthPer = (cardWidth / width) * 100;
         this.showCardWidthPer = ((cardWidth + 2) / width * 0.75) * 100;
+      }
+    },
+    sockets: {
+      dealCard(ret) {
+        this.player = ret.player;
+        this.cards = ret.cards;
+      },
+      start() {
+        this.isStart = true;
+        if (this.cards.includes("3C")) {
+          this.yourTurn = true;
+        }
+      },
+      updateCard(cards) {
+        console.log(cards);
+        if (this.player == cards.nextPlayer) {
+          this.yourTurn = true;
+        }
+        this.showCards = cards.cards;
+        this.lastCardsInfo = cards.cardsInfo;
+      },
+      lastPass(player) {
+        if (this.player == player.nextPlayer) {
+          this.yourTurn = true;
+        }
+        if(player.allPass){
+          this.allPass = true;
+        }
       }
     },
     mounted() {
