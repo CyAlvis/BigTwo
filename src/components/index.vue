@@ -1,25 +1,34 @@
 <template>
   <div id="container">
-    <div id="table">
+    <div v-if="isName==false">
+      <input v-model="name" placeholder="請輸入你的暱稱" />
+      <button @click="enter" type="button">進入</button>
+    </div>
+    <div v-if="isName==true" id="table">
       <div id="top">
         <span class="note">top</span>
         <div style="width:30%; " class="left">
-          <span v-if="yourTurn">換你了</span>
+          <span v-if="yourTurn == playerOrder">換你了</span>
         </div>
-        <div style="width:40%" class="center">
-          {{cards}}<br> {{chosenCards}} <br>
+        <div style="width:40%;position:relative;" class="center">
+          <span style="position:absolute;top:40%;left:30%;width:40%;text-align:center;height:20%" v-if="playerList[playerOrder+2>4?playerOrder-2:playerOrder+2]!=false">{{playerList[playerOrder+2>4?playerOrder-2:playerOrder+2]}}</span>
+          <span style="position:absolute;top:40%;left:40%;width:20%;text-align:center;height:20%" v-if="playerList[playerOrder+2>4?playerOrder-2:playerOrder+2]==false">等待中</span>
         </div>
         <div style="width:30%" class="right">
         </div>
       </div>
       <div id="middle">
         <span class="note">middle</span>
-        <div style="width:20%" class="left">
+        <div style="width:20%;position:relative;" class="left">
+          <span style="position:absolute;top:46%;left:10%;width:80%;text-align:center;height:8%" v-if="playerList[playerOrder+1>4?playerOrder-3:playerOrder+1]!=false">{{playerList[playerOrder+1>4?playerOrder-3:playerOrder+1]}}</span>
+          <span style="position:absolute;top:40%;left:40%;width:20%;text-align:center;height:20%" v-if="playerList[playerOrder+1>4?playerOrder-3:playerOrder+1]==false">等待中</span>
         </div>
         <div style="width:60%" class="center">
           <img ref="showCard" :style="`left:${(100-showCardWidthPer)/10*index+(100-(showCards.length-1)*((100-showCardWidthPer)/10)-showCardWidthPer)/2}%;`" v-for="(card,index) in showCards" :src="`/static/cards/${card}.jpg`" />
         </div>
-        <div style="width:20%" class="right">
+        <div style="width:20%;position:relative;" class="right">
+          <span style="position:absolute;top:46%;left:10%;width:80%;text-align:center;height:8%" v-if="playerList[playerOrder+3>4?playerOrder-1:playerOrder+3]!=false">{{playerList[playerOrder+3>4?playerOrder-1:playerOrder+3]}}</span>
+          <span style="position:absolute;top:40%;left:40%;width:20%;text-align:center;height:20%" v-if="playerList[playerOrder+3>4?playerOrder-1:playerOrder+3]==false">等待中</span>
         </div>
       </div>
       <div id="bottom">
@@ -32,8 +41,8 @@
         </div>
         <div style="width:10%" class="right">
           <div class="button">
-            <button @click="playCard" :disabled="!yourTurn || !checkCards">出牌</button>
-            <button @click="pass" :disabled="!yourTurn">Pass</button>
+            <button @click="playCard" :disabled="yourTurn!=playerOrder || !checkCards">出牌</button>
+            <button @click="pass" :disabled="yourTurn!=playerOrder || cards.includes('3C')">Pass</button>
           </div>
         </div>
       </div>
@@ -46,6 +55,8 @@
     name: 'index',
     data() {
       return {
+        name: "",
+        isName: false,
         cards: [],
         cardWidthPer: 0,
         showCardWidthPer: 0,
@@ -59,10 +70,16 @@
           type: "",
           value: ""
         },
-        yourTurn: false,
+        yourTurn: 0,
         allPass: false,
-        player: 0,
-        isStart: false
+        playerOrder: 0,
+        playerList: {
+          1: "",
+          2: "",
+          3: "",
+          4: ""
+        },
+        isStart: false,
       }
     },
     computed: {
@@ -137,6 +154,14 @@
       }
     },
     methods: {
+      enter() {
+        if (this.name != false) {
+          this.isName = true;
+          this.$socket.emit("join", this.name);
+        } else {
+          alert("請輸入暱稱！");
+        }
+      },
       chooseCard(index) {
         this.chosenCardInfo.type = "";
         this.chosenCardInfo.value = "";
@@ -157,15 +182,20 @@
         this.analysisCards();
       },
       playCard() {
-        this.$socket.emit("playCard", {
-          player: this.player,
-          cards: this.chosenCards,
-          cardsInfo: this.chosenCardInfo
-        })
         this.showCards = this.chosenCards;
         for (let element of this.chosenCards) {
           let index = this.cards.indexOf(element);
           this.cards.splice(index, 1);
+        }
+        if (this.cards.length == 0) {
+          this.$socket.emit("win", this.name);
+          alert("Congratulations! You win!");
+        } else {
+          this.$socket.emit("playCard", {
+            player: this.playerOrder,
+            cards: this.chosenCards,
+            cardsInfo: this.chosenCardInfo
+          })
         }
         for (let i = 0; i < this.cards.length; i++) {
           this.$refs.card[i].style.top = "5%";
@@ -177,16 +207,21 @@
         this.chosenCardInfo.value = "";
         this.lastCardsInfo.type = "";
         this.lastCardsInfo.value = "";
-        this.yourTurn = false;
+        this.yourTurn = 0;
       },
       pass() {
-        this.$socket.emit("pass", this.player);
+        this.$socket.emit("pass", this.playerOrder);
+        for (let i = 0; i < this.cards.length; i++) {
+          this.$refs.card[i].style.top = "5%";
+          this.$refs.card[i].style.border = "";
+          this.$refs.card[i].style.borderRadius = "";
+        }
         this.chosenCards = [];
         this.chosenCardInfo.type = "";
         this.chosenCardInfo.value = "";
         this.lastCardsInfo.type = "";
         this.lastCardsInfo.value = "";
-        this.yourTurn = false;
+        this.yourTurn = 0;
       },
       analysisCards() {
         this.chosenCards = this.chosenCards.sort();
@@ -357,38 +392,35 @@
     },
     sockets: {
       dealCard(ret) {
-        this.player = ret.player;
+        this.playerOrder = ret.playerOrder;
         this.cards = ret.cards;
       },
-      start() {
+      updatePlayerList(playerList) {
+        this.playerList = playerList;
+      },
+      start(first) {
         this.isStart = true;
-        if (this.cards.includes("3C")) {
-          this.yourTurn = true;
-        }
+        this.resizeCardWidth();
+        let vm = this;
+        window.addEventListener('resize', vm.resizeCardWidth);
+        this.yourTurn = first;
       },
       updateCard(cards) {
-        console.log(cards);
-        if (this.player == cards.nextPlayer) {
-          this.yourTurn = true;
-        }
+        this.yourTurn = cards.nextPlayer;
         this.showCards = cards.cards;
         this.lastCardsInfo = cards.cardsInfo;
       },
       lastPass(player) {
-        if (this.player == player.nextPlayer) {
-          this.yourTurn = true;
-        }
-        if(player.allPass){
+        this.yourTurn = player.nextPlayer;
+        if (player.allPass) {
           this.allPass = true;
         }
+      },
+      otherWin(player) {
+        alert(`Player ${player} win!`);
       }
     },
     mounted() {
-      let vm = this;
-      this.$nextTick(() => {
-        vm.resizeCardWidth();
-        window.addEventListener('resize', vm.resizeCardWidth);
-      })
     }
   }
 </script>
